@@ -112,8 +112,14 @@ export interface LoopSourceDb {
 export interface SourceFetchContext {
   db: LoopSourceDb
   site: SiteDocument
-  /** Source-specific filter values, validated against `filterSchema`. */
-  filters: Record<string, unknown>
+  /**
+   * Source-specific filter values, validated against `filterSchema`.
+   * Bisa juga STRING tunggal (mis. kategori dari param enum sebuah
+   * Visual Component yang ter-bind ke prop `filters`) — konvensi:
+   * string = nilai filter `category`. Sources memilih bentuk yang
+   * didukung.
+   */
+  filters: Record<string, unknown> | string
   /** One of the source's `orderByOptions[].id` values. */
   orderBy: string
   direction: 'asc' | 'desc'

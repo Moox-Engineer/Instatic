@@ -142,7 +142,7 @@ export function collectLoopNodes(
  */
 interface LoopProps {
   sourceId: string
-  filters: Record<string, unknown>
+  filters: Record<string, unknown> | string
   orderBy: string
   direction: 'asc' | 'desc'
   limit: number
@@ -156,9 +156,11 @@ export function readLoopProps(node: PageNode): LoopProps {
   return {
     sourceId: typeof props.sourceId === 'string' ? props.sourceId : '',
     filters:
-      props.filters && typeof props.filters === 'object' && !Array.isArray(props.filters)
-        ? (props.filters as Record<string, unknown>)
-        : {},
+      typeof props.filters === 'string' && props.filters.trim()
+        ? props.filters.trim()
+        : props.filters && typeof props.filters === 'object' && !Array.isArray(props.filters)
+          ? (props.filters as Record<string, unknown>)
+          : {},
     orderBy: typeof props.orderBy === 'string' ? props.orderBy : '',
     direction: props.direction === 'asc' ? 'asc' : 'desc',
     limit: typeof props.limit === 'number' && props.limit > 0 ? Math.floor(props.limit) : 10,

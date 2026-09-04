@@ -21,6 +21,7 @@
  */
 
 import type { DbClient } from '../../db/client'
+import type { Page, PageNode } from '@core/page-tree'
 import { registry } from '@core/module-engine'
 import { loopSourceRegistry } from '@core/loops/registry'
 import {
@@ -29,10 +30,12 @@ import {
   type RenderAccumulators,
   type ResolvedLoopRenderData,
 } from '@core/publisher'
+import { selectVisualComponentById } from '@core/page-tree'
 import { jsonResponse } from '../../http'
 import { readLoopProps } from '../../publish/loopPrefetch'
 import { getPublishedLoopIndexForVersion } from '../../publish/publishedSnapshotCache'
 import { getPublishVersion } from '../../publish/publishState'
+import { isTemplatePage } from '@core/templates'
 import { LOOP_RUNTIME_JS } from '../../publish/loopRuntime'
 
 const LOOP_RUNTIME_PATH = '/_instatic/assets/loop-runtime.js'
@@ -86,8 +89,86 @@ export async function handleLoopRequest(
   if (!indexed) {
     return jsonResponse({ error: 'Loop not found' }, { status: 404 })
   }
-  const { page: containingPage, node: loopNode } = indexed
   const site = loopIndex.site
+  const fallback = loopIndex.loops.get(loopId)
+  const fallbackPage = fallback?.page
+  const fallbackNode = fallback?.node
+
+  // Resolve per pagePath: loop id sama bisa hidup di banyak halaman dengan
+  // prop tersubstitusi BERBEDA (propOverrides ref VC — kategori/limit/
+  // pagination per halaman). Resolver mengembalikan loop node SEKALIGUS
+  // map node pemiliknya (definisi VC tersubstitusi) supaya render anak
+  // loop punya halaman sintetis yang benar.
+  const findLoopWithOwner = (
+    curNodes: Record<string, PageNode>,
+    rootNodeId: string,
+    seenRefs: ReadonlySet<string>,
+  ): { loopNode: PageNode; ownerNodes: Record<string, PageNode>; ownerRoot: string } | null => {
+    const node = curNodes[rootNodeId]
+    if (!node) return null
+    if (node.moduleId === 'base.loop' && node.id === loopId) {
+      return { loopNode: node, ownerNodes: curNodes, ownerRoot: rootNodeId }
+    }
+    if (node.moduleId === 'base.visual-component-ref') {
+      const refProps = (node.props ?? {}) as Record<string, unknown>
+      const componentId = typeof refProps['componentId'] === 'string' ? refProps['componentId'] : ''
+      if (componentId && !seenRefs.has(rootNodeId)) {
+        const vc = selectVisualComponentById(site, componentId)
+        if (vc) {
+          const overrides =
+            refProps['propOverrides'] && typeof refProps['propOverrides'] === 'object'
+              ? (refProps['propOverrides'] as Record<string, unknown>)
+              : {}
+          const substituted: Record<string, PageNode> = {}
+          for (const [id, defNode] of Object.entries(vc.tree.nodes as Record<string, PageNode>)) {
+            const bindings = defNode.propBindings
+            if (!bindings || Object.keys(bindings).length === 0) {
+              substituted[id] = defNode
+              continue
+            }
+            const props = { ...defNode.props }
+            for (const [propKey, binding] of Object.entries(bindings)) {
+              const paramId = (binding as { paramId?: string } | undefined)?.paramId
+              if (paramId && overrides[paramId] !== undefined) props[propKey] = overrides[paramId]
+            }
+            substituted[id] = { ...defNode, props }
+          }
+          const found = findLoopWithOwner(substituted, vc.tree.rootNodeId, new Set(seenRefs).add(rootNodeId))
+          if (found) return found
+        }
+      }
+    }
+    for (const childId of node.children) {
+      const found = findLoopWithOwner(curNodes, childId, seenRefs)
+      if (found) return found
+    }
+    return null
+  }
+
+  let containingPage: Page | undefined = fallbackPage
+  let ownerNodes: Record<string, PageNode> | undefined = fallbackPage?.nodes
+  let ownerRoot: string | undefined = fallbackNode ? fallbackPage.rootNodeId : undefined
+  let loopNode: PageNode | undefined = fallbackNode
+
+  const pagePath = url.searchParams.get('pagePath')
+  if (pagePath) {
+    const slug = pagePath.replace(/^\/+/, '').replace(/\/+$/, '')
+    const candidate = site.pages.find(
+      (pg) => pg.slug === slug && !isTemplatePage(pg),
+    )
+    if (candidate) {
+      const found = findLoopWithOwner(candidate.nodes, candidate.rootNodeId, new Set())
+      if (found) {
+        containingPage = candidate
+        loopNode = found.loopNode
+        ownerNodes = found.ownerNodes
+        ownerRoot = found.ownerRoot
+      }
+    }
+  }
+  if (!loopNode || !containingPage || !ownerNodes || !ownerRoot) {
+    return jsonResponse({ error: 'Loop not found' }, { status: 404 })
+  }
 
   const props = readLoopProps(loopNode)
   if (props.pagination !== 'infinite') {
@@ -130,8 +211,11 @@ export async function handleLoopRequest(
   if (variants.length === 0) {
     return jsonResponse({ html: '', hasMore, pageNumber })
   }
+  // Halaman sintetis: untuk loop di dalam VC, node anaknya hidup di tree
+  // definisi (tersubstitusi), bukan di halaman.
+  const syntheticPage: Page = { ...containingPage, nodes: ownerNodes, rootNodeId: ownerRoot }
   const baseConfig: RenderConfig = {
-    page: containingPage,
+    page: syntheticPage,
     site,
     registry,
     breakpointId: undefined,
