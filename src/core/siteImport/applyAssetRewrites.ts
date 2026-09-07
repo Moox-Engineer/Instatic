@@ -26,7 +26,7 @@ import type { ImportPlan, ImportStylesheet, NewStyleRule, ImportFontFamily } fro
 // Props that may carry normalised FileMap keys in page nodes
 // ---------------------------------------------------------------------------
 
-const URL_BEARING_PROPS: ReadonlySet<string> = new Set(['src', 'href', 'srcset'])
+const URL_BEARING_PROPS: ReadonlySet<string> = new Set(['src', 'href', 'srcset', 'videoUrl', 'poster'])
 
 // ---------------------------------------------------------------------------
 // Public function

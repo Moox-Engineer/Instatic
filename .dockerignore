@@ -14,6 +14,8 @@ backups
 !.env.example
 !.env.production.example
 docs/superpowers
+moox
+moox-import.zip
 
 # Test sources are verified in CI but are not needed in production images.
 **/__tests__

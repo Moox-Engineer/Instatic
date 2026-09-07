@@ -130,11 +130,18 @@ export function createSqliteClient(filename: string): DbClient {
   let txChain: Promise<unknown> = Promise.resolve()
   fn.transaction = <T>(cb: (tx: DbClient) => Promise<T>): Promise<T> => {
     const run = async (): Promise<T> => {
-      // BEGIN is outside the try: if it throws, it propagates without a
-      // ROLLBACK (nothing was opened), so a failed BEGIN can never roll back an
-      // unrelated transaction. Serialization already guarantees BEGIN never
-      // runs while another transaction is open.
-      await fn.unsafe('BEGIN')
+      // BEGIN IMMEDIATE is outside the try: if it throws, it propagates
+      // without a ROLLBACK (nothing was opened), so a failed BEGIN can never
+      // roll back an unrelated transaction. Serialization already guarantees
+      // BEGIN never runs while another transaction is open.
+      //
+      // IMMEDIATE (not DEFERRED) takes the write lock at BEGIN time. With a
+      // second writer present (Litestream's _litestream_seq heartbeat), a
+      // DEFERRED transaction that reads first and writes later dies with
+      // SQLITE_BUSY_SNAPSHOT when the other writer commits mid-transaction —
+      // and the busy handler does NOT retry that error. IMMEDIATE makes the
+      // other writer wait instead.
+      await fn.unsafe('BEGIN IMMEDIATE')
       try {
         const result = await cb(fn)
         await fn.unsafe('COMMIT')

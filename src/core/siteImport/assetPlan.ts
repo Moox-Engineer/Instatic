@@ -43,7 +43,7 @@ import { guessMimeType, isImportUploadableMimeType } from './mimeTypes'
 // Props that may contain relative asset URLs in page nodes
 // ---------------------------------------------------------------------------
 
-const URL_BEARING_PROPS: ReadonlySet<string> = new Set(['src', 'href', 'srcset'])
+const URL_BEARING_PROPS: ReadonlySet<string> = new Set(['src', 'href', 'srcset', 'videoUrl', 'poster'])
 
 // ---------------------------------------------------------------------------
 // Public types
