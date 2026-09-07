@@ -103,7 +103,13 @@ export const SitePagesSource: LoopEntitySource = {
   ],
 
   async fetch(ctx): Promise<LoopFetchResult> {
-    const filtered = filterPagesForLoop(ctx.site.pages, ctx.filters)
+    // filters bisa Record (LoopEditor) atau string (param enum VC) —
+    // source bawaan hanya memakai bentuk Record.
+    const recordFilters =
+      ctx.filters && typeof ctx.filters === 'object' && !Array.isArray(ctx.filters)
+        ? ctx.filters
+        : {}
+    const filtered = filterPagesForLoop(ctx.site.pages, recordFilters)
     const sorted =
       ctx.orderBy === 'title' || ctx.orderBy === 'slug'
         ? [...filtered].sort((a, b) => compare(a, b, ctx.orderBy, ctx.direction))

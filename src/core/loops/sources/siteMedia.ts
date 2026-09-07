@@ -182,8 +182,14 @@ export const SiteMediaSource: LoopEntitySource = {
   ],
 
   async fetch(ctx): Promise<LoopFetchResult> {
+    // filters bisa Record (LoopEditor) atau string (param enum VC) —
+    // source bawaan hanya memakai bentuk Record.
+    const recordFilters =
+      ctx.filters && typeof ctx.filters === 'object' && !Array.isArray(ctx.filters)
+        ? ctx.filters
+        : {}
     const mimePrefix =
-      typeof ctx.filters.mimePrefix === 'string' ? ctx.filters.mimePrefix : ''
+      typeof recordFilters.mimePrefix === 'string' ? recordFilters.mimePrefix : ''
     const orderBy: 'createdAt' | 'filename' =
       ctx.orderBy === 'filename' ? 'filename' : 'createdAt'
     const direction: 'asc' | 'desc' = ctx.direction === 'asc' ? 'asc' : 'desc'
