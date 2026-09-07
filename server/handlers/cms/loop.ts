@@ -147,7 +147,8 @@ export async function handleLoopRequest(
 
   let containingPage: Page | undefined = fallbackPage
   let ownerNodes: Record<string, PageNode> | undefined = fallbackPage?.nodes
-  let ownerRoot: string | undefined = fallbackNode ? fallbackPage.rootNodeId : undefined
+  let ownerRoot: string | undefined =
+    fallbackPage && fallbackNode ? fallbackPage.rootNodeId : undefined
   let loopNode: PageNode | undefined = fallbackNode
 
   const pagePath = url.searchParams.get('pagePath')

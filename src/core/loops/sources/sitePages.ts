@@ -125,7 +125,8 @@ export const SitePagesSource: LoopEntitySource = {
   },
 
   preview(ctx) {
-    const filtered = filterPagesForLoop(ctx.site.pages, recordFilters)
+    // SourcePreviewContext.filters tetap Record — tidak lewat param VC.
+    const filtered = filterPagesForLoop(ctx.site.pages, ctx.filters)
     return filtered.slice(0, ctx.limit).map(pageToLoopItem)
   },
 }
