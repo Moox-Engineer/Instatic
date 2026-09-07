@@ -574,13 +574,19 @@ export const DataRowsSource: LoopEntitySource = {
   ],
 
   async fetch(ctx): Promise<LoopFetchResult> {
+    // filters bisa Record (LoopEditor) atau string (param enum VC) —
+    // source bawaan hanya memakai bentuk Record.
+    const recordFilters =
+      ctx.filters && typeof ctx.filters === 'object' && !Array.isArray(ctx.filters)
+        ? ctx.filters
+        : {}
     return fetchPublishedDataRowItems(ctx.db, {
-      tableId: typeof ctx.filters.tableId === 'string' ? ctx.filters.tableId : '',
+      tableId: typeof recordFilters.tableId === 'string' ? recordFilters.tableId : '',
       orderBy: ctx.orderBy,
       direction: ctx.direction,
       limit: ctx.limit,
       offset: ctx.offset,
-      cellFilter: parseCellFilter(ctx.filters),
+      cellFilter: parseCellFilter(recordFilters),
     })
   },
 
