@@ -49,6 +49,26 @@ export function getPublishVersion(): number {
 }
 
 /**
+ * Restore the publish version after a process start.
+ *
+ * `publishVersion` is process memory, so a restart zeroes it while the baked
+ * slot keeps its old stamp — every `<instatic-hole>` then fails the hole
+ * endpoint's `?v=` equality check and the whole site serves
+ * `<instatic-hole-stale>` until somebody publishes again. Boot hydrates from
+ * the stamps on disk (`readActiveSlotPublishVersion`) so visitors keep getting
+ * fragments across restarts.
+ *
+ * Monotonic: never lowers the counter, so a bump that already happened in
+ * this process (or a hydration racing an early publish) keeps its value.
+ */
+export function hydratePublishVersion(version: number): number {
+  if (Number.isSafeInteger(version) && version > publishVersion) {
+    publishVersion = version
+  }
+  return publishVersion
+}
+
+/**
  * Bump the publish version under the publish lock. The serialization matters
  * (ISS-038): a bare bump racing a publish's read-version → bake → bump window
  * would mis-stamp its baked hole shells as permanently stale. Call this from

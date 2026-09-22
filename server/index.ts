@@ -2,6 +2,8 @@ import { createDbClient } from './db'
 import { runMigrations } from './db/runMigrations'
 import { syncSystemRoles } from './repositories/roles'
 import { readServerConfig } from './config'
+import { hydratePublishVersion } from './publish/publishState'
+import { readActiveSlotPublishVersion } from './publish/staticArtefact'
 import { DEV_ORIGIN_ALLOWLIST, configurePublicOrigins, configureTrustedProxyCidrs, stampSocketIp } from './auth/security'
 import { applySecurityHeaders } from './securityHeaders'
 import { startConversationPurgeTick } from './ai/boot'
@@ -24,6 +26,18 @@ await runMigrations(db, migrations)
 // installations don't strand owners on a stale grant list when new
 // capabilities are added in code. See `syncSystemRoles` for the policy.
 await syncSystemRoles(db)
+// The publish version is process memory: after a restart it starts at 0 while
+// the baked slot keeps its old stamp, and the hole endpoint's strict `?v=`
+// equality then blanks every `<instatic-hole>` on the site until somebody
+// publishes. Read the stamps back so a restart (deploy, OOM, host reboot)
+// serves fragments instead of <instatic-hole-stale>.
+try {
+  const stamped = await readActiveSlotPublishVersion(config.uploadsDir)
+  if (stamped !== null) hydratePublishVersion(stamped)
+} catch {
+  // Best effort — boot must never fail on the version probe; the worst case
+  // is today's behaviour (stale holes until the next publish).
+}
 // Wire the built-in local-disk media adapter BEFORE plugins activate —
 // plugin adapters register through the same registry but local-disk is
 // always the fallback for unset roles. See `mediaStorageRegistry.ts`.

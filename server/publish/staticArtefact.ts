@@ -31,8 +31,10 @@
  */
 
 import { dirname, isAbsolute, join, relative } from 'node:path'
+import { type Dirent } from 'node:fs'
 import {
   mkdir,
+  readdir,
   readFile,
   readlink,
   rename,
@@ -196,6 +198,58 @@ export async function getActiveSlot(uploadsDir: string): Promise<Slot> {
 export async function getInactiveSlot(uploadsDir: string): Promise<Slot> {
   const active = await getActiveSlot(uploadsDir)
   return active === 'a' ? 'b' : 'a'
+}
+
+/**
+ * Read the publish version baked into the ACTIVE slot's artefacts.
+ *
+ * `publishVersion` exists only in process memory, so a restart zeroes it while
+ * the slot keeps serving shells stamped with the old number — and the hole
+ * endpoint compares those stamps for strict equality, which blanks every
+ * `<instatic-hole>` on the site until the next publish. Boot reads the stamps
+ * back (`hydratePublishVersion`) so the counter matches what visitors carry.
+ *
+ * Returns the HIGHEST `data-instatic-version` in the slot: a full publish
+ * stamps every page with one number, but an incremental row publish rewrites
+ * only its own artefact, so lower numbers elsewhere are expected. `null` when
+ * nothing is published or no artefact carries a stamp (first-ever boot).
+ *
+ * Reads the slot `getActiveSlot` resolves (the same `current` target the
+ * visitor router follows), so it always sees what a visitor would see.
+ */
+export async function readActiveSlotPublishVersion(uploadsDir: string): Promise<number | null> {
+  const slotDir = join(getPublishedDir(uploadsDir), await getActiveSlot(uploadsDir))
+  let highest: number | null = null
+  for (const filePath of await listHtmlArtefacts(slotDir)) {
+    let html: string
+    try {
+      html = await readFile(filePath, 'utf-8')
+    } catch {
+      continue // slot wiped/rotated mid-scan — skip, next publish re-stamps
+    }
+    const match = /data-instatic-version="(\d+)"/.exec(html)
+    if (!match) continue
+    const version = Number(match[1])
+    if (highest === null || version > highest) highest = version
+  }
+  return highest
+}
+
+/** Recursive `.html` listing; a missing directory (nothing published yet) yields []. */
+async function listHtmlArtefacts(dir: string): Promise<string[]> {
+  let entries: Dirent[]
+  try {
+    entries = await readdir(dir, { withFileTypes: true })
+  } catch {
+    return []
+  }
+  const files: string[] = []
+  for (const entry of entries) {
+    const full = join(dir, entry.name)
+    if (entry.isDirectory()) files.push(...(await listHtmlArtefacts(full)))
+    else if (entry.name.endsWith('.html')) files.push(full)
+  }
+  return files
 }
 
 /**
