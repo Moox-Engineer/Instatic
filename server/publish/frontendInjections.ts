@@ -402,6 +402,10 @@ function relaxCspForPlan(html: string, plan: FrontendInjections, hasTags: boolea
       if (plan.networkAllowedHosts.length > 0) {
         addCspSources(csp, 'connect-src', ["'self'", ...toCspHostSources(plan.networkAllowedHosts)])
         addCspSources(csp, 'img-src', ["'self'", 'data:', 'https:'])
+        // Frame: a plugin that declares an outbound host may embed it (visitor-side
+        // widget islands, e.g. a vendor's try-on in a modal). Same trust decision
+        // as `connect-src` — the manifest is the plugin's declared public surface.
+        addCspSources(csp, 'frame-src', ["'self'", ...toCspHostSources(plan.networkAllowedHosts)])
       }
     }
 
